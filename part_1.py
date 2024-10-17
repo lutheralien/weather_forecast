@@ -1,77 +1,138 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+import numpy as np
 
-def load_data(file_path):
-    df = pd.read_csv(file_path)
-    print("Data loaded successfully.")
+def load_data():
+    while True:
+        file_path = input("Please enter the path to your Chicago weather CSV file: ")
+        if file_path.endswith('.csv'):
+            try:
+                df = pd.read_csv(file_path)
+                print("Great! The file has been loaded successfully.")
+                return df
+            except Exception as e:
+                print(f"Oops! There was an error reading the file: {str(e)}")
+                print("Please make sure the file is a valid CSV and try again.")
+        else:
+            print("The file name seems incorrect. Please ensure the file has a .csv extension.")
+
+def preprocess_data(df):
+    # Keep only numerical columns
+    df = df.select_dtypes(include=[np.number])
+    print("\nGreat! I've processed the data and kept only the numerical columns.")
+    print("Here are the columns available in the dataset:", df.columns.tolist())
     return df
 
-def prepare_data(df):
-    df['Heavy_Rainfall'] = (df['Precipitation_mm'] > 30).astype(int)
-    features = ['Temperature_C', 'Humidity_pct', 'Wind_Speed_kmh']
+def select_target(df):
+    while True:
+        target = input("\nWhich column would you like to predict? Please enter the column name: ").strip()
+        if target in df.columns:
+            return target
+        else:
+            print(f"I'm sorry, but '{target}' is not a column in the dataset. Please try again.")
+
+def select_features(df, target):
+    available_features = [col for col in df.columns if col != target]
+    print(f"\nAvailable features for predicting {target}:", available_features)
+    
+    features = []
+    while True:
+        feature = input("Please enter a feature name to use for prediction (or press Enter if you're done): ").strip()
+        if feature == "":
+            break
+        if feature in available_features:
+            features.append(feature)
+        else:
+            print(f"I'm sorry, but '{feature}' is not an available feature. Please try again.")
+    
+    if len(features) == 0:
+        raise ValueError("You need to select at least one feature for prediction.")
+    
+    return features
+
+def train_model(df, features, target):
     X = df[features]
-    y = df['Heavy_Rainfall']
-    return X, y, features
+    y = df[target]
 
-def train_model(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    model = DecisionTreeClassifier(random_state=42)
-    model.fit(X_train, y_train)
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"Model accuracy: {accuracy:.2f}")
-    return model
 
-def get_user_input(features):
-    user_data = {}
+    model = LinearRegression()
+    model.fit(X_train, y_train)
+
+    y_pred = model.predict(X_test)
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+
+    print(f"\nModel Performance:")
+    print(f"Mean Squared Error: {mse:.4f}")
+    print(f"R-squared Score: {r2:.4f}")
+
+    print("\nFeature Importances:")
+    for feature, coef in zip(features, model.coef_):
+        print(f"{feature}: {coef:.4f}")
+
+    return model, mse
+
+def predict_weather(model, features, target, mse):
+    print(f"\nLet's predict {target}! Please enter the weather details:")
+    input_data = {}
+    
     for feature in features:
         while True:
             try:
-                value = float(input(f"Enter {feature}: "))
-                user_data[feature] = value
+                value = float(input(f"Enter the value for {feature}: "))
+                input_data[feature] = value
                 break
             except ValueError:
-                print("Please enter a valid number.")
-    return user_data
+                print("Oops! That wasn't a valid number. Please try again.")
 
-def predict_rainfall(model, user_data, features):
-    user_input = [user_data[feature] for feature in features]
-    prediction = model.predict([user_input])[0]
-    
-    if prediction == 1:
-        return "The rainfall is predicted to be greater than 30mm."
-    else:
-        return None  # Return None if rainfall is predicted to be 30mm or less
+    input_df = pd.DataFrame([input_data])
+    predicted_value = model.predict(input_df)[0]
+
+    print(f"\nBased on the information you provided, the predicted {target} is: {predicted_value:.2f}")
+
+    # Save prediction
+    with open('chicago_weather_predictions.txt', 'a') as f:
+        f.write("=" * 50 + "\n")
+        f.write("New Prediction\n")
+        f.write("=" * 50 + "\n")
+        f.write("Input:\n")
+        for feature, value in input_data.items():
+            f.write(f"  {feature}: {value}\n")
+        f.write("-" * 30 + "\n")
+        f.write(f"Predicted {target}: {predicted_value:.2f}\n")
+        f.write(f"Mean Squared Error: {mse:.4f}\n")
+        f.write("=" * 50 + "\n\n")
+
+    print(f"I've saved this prediction to 'chicago_weather_predictions.txt' for your reference.")
 
 def main():
-    file_path = input("Enter the path to your Chicago weather CSV file: ")
-    
     try:
-        df = load_data(file_path)
-        X, y, features = prepare_data(df)
-        model = train_model(X, y)
+        print("Welcome to the Chicago Weather Prediction Program!")
+        df = load_data()
+        df = preprocess_data(df)
         
+        target = select_target(df)
+        features = select_features(df, target)
+
+        print(f"\nGreat! We'll use {', '.join(features)} to predict {target}.")
+        model, mse = train_model(df, features, target)
+
         while True:
-            print("\nEnter weather conditions:")
-            user_data = get_user_input(features)
-            result = predict_rainfall(model, user_data, features)
-            if result:
-                print(result)
-            else:
-                print("No heavy rainfall predicted.")
-            
-            again = input("Do you want to make another prediction? (yes/no): ").lower()
-            if again != 'yes' and again != 'y':
+            predict_weather(model, features, target, mse)
+            another = input(f"\nWould you like to predict {target} for another set of conditions? (yes/no): ").lower()
+            if another != 'yes' and another != 'y':
                 break
-        
-        print("Thank you for using the Chicago Rainfall Prediction program!")
-    
+
+        print("\nThank you for using the Chicago Weather Prediction Program. Have a great day!")
+    except ValueError as ve:
+        print(f"Error: {str(ve)}")
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
-    
-    input("Press Enter to exit...")
+        print(f"An unexpected error occurred: {str(e)}")
+    finally:
+        input("Press Enter to exit the program...")
 
 if __name__ == "__main__":
     main()
