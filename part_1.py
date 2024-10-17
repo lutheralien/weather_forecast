@@ -9,27 +9,19 @@ def load_data(file_path):
     return df
 
 def prepare_data(df):
-    # Create target variable: 1 if rainfall > 30mm, 0 otherwise
     df['Heavy_Rainfall'] = (df['Precipitation_mm'] > 30).astype(int)
-    
-    # Select features (you can modify this list based on your dataset)
     features = ['Temperature_C', 'Humidity_pct', 'Wind_Speed_kmh']
-    
     X = df[features]
     y = df['Heavy_Rainfall']
-    
     return X, y, features
 
 def train_model(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
     model = DecisionTreeClassifier(random_state=42)
     model.fit(X_train, y_train)
-    
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
     print(f"Model accuracy: {accuracy:.2f}")
-    
     return model
 
 def get_user_input(features):
@@ -51,7 +43,7 @@ def predict_rainfall(model, user_data, features):
     if prediction == 1:
         return "The rainfall is predicted to be greater than 30mm."
     else:
-        return "The rainfall is predicted to be 30mm or less."
+        return None  # Return None if rainfall is predicted to be 30mm or less
 
 def main():
     file_path = input("Enter the path to your Chicago weather CSV file: ")
@@ -65,7 +57,10 @@ def main():
             print("\nEnter weather conditions:")
             user_data = get_user_input(features)
             result = predict_rainfall(model, user_data, features)
-            print(result)
+            if result:
+                print(result)
+            else:
+                print("No heavy rainfall predicted.")
             
             again = input("Do you want to make another prediction? (yes/no): ").lower()
             if again != 'yes' and again != 'y':
